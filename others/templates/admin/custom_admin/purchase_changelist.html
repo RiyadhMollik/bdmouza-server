@@ -1,0 +1,22 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+
+{% block content_title %}
+  <div style="margin-bottom: 20px;">
+    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+      <div style="padding: 15px; background: #4caf50; color: white; border-radius: 8px;">
+        <strong>This Month:</strong><br> ৳{{ this_month_amount }}
+      </div>
+      <div style="padding: 15px; background: #2196f3; color: white; border-radius: 8px;">
+        <strong>This Week:</strong><br> ৳{{ this_week_amount }}
+      </div>
+      <div style="padding: 15px; background: #ff9800; color: white; border-radius: 8px;">
+        <strong>Today:</strong><br> ৳{{ today_amount }}
+      </div>
+      <div style="padding: 15px; background: #f44336; color: white; border-radius: 8px;">
+        <strong>Pending:</strong><br> ৳{{ pending_amount }}
+      </div>
+    </div>
+  </div>
+  {{ block.super }}
+{% endblock %}

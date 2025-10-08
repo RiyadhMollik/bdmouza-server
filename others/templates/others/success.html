@@ -1,0 +1,20 @@
+<!-- others/templates/others/success.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Payment Success</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 40px; }
+        .success { color: green; font-size: 24px; margin-bottom: 20px; }
+        .info { font-size: 18px; }
+    </style>
+</head>
+<body>
+    <div class="success">✅ Payment Successful!</div>
+    <div class="info">
+        <p><strong>Invoice ID:</strong> {{ invoice_id }}</p>
+        <p><strong>Purchase ID:</strong> {{ purchase_id }}</p>
+    </div>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Creation Confirmation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            background-color: #fff;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background-color: #007bff;
+            color: #fff;
+            padding: 20px;
+            text-align: center;
+        }
+        .content {
+            padding: 30px;
+        }
+        p {
+            margin: 10px 0;
+            line-height: 1.6;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .footer p {
+            margin: 5px 0;
+        }
+        .footer a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Account Created Successfully!</h1>
+        </div>
+        <div class="content">
+            <p>Dear User,</p>
+            <p>Your account has been created successfully.</p>
+            <p><strong>Email:</strong> {{ email }}</p>
+            <p><strong>Password:</strong> {{ password }}</p>
+            <p>Thank you for joining us!</p>
+        </div>
+        <div class="footer">
+            <p>This is an automated message. Please do not reply.</p>
+            <p>For any assistance, please contact <a href="mailto:support@example.com">support@vitasoftsolutions.com</a></p>
+        </div>
+    </div>
+</body>
+</html>

@@ -411,13 +411,21 @@ def eps_payment_callback(request):
 
         logger.info(f'EPS Callback received: {callback_data}')
 
-        # Extract relevant data
-        status_param = callback_data.get('status', callback_data.get('Status', '')).lower()
-        merchant_transaction_id = callback_data.get('merchantTransactionId', callback_data.get('MerchantTransactionId', ''))
-        amount = callback_data.get('amount', callback_data.get('Amount', ''))
-        transaction_id = callback_data.get('transactionId', callback_data.get('EPSTransactionId', ''))
-        error_code = callback_data.get('ErrorCode', '')
-        error_message = callback_data.get('ErrorMessage', '')
+        # Extract relevant data - handle both dict and QueryDict values
+        def get_param_value(data, key1, key2='', default=''):
+            """Helper to get parameter value from either dict or QueryDict"""
+            value = data.get(key1, data.get(key2, default))
+            # Handle QueryDict values (which are lists)
+            if isinstance(value, list):
+                return value[0] if value else default
+            return value
+
+        status_param = get_param_value(callback_data, 'status', 'Status', '').lower()
+        merchant_transaction_id = get_param_value(callback_data, 'merchantTransactionId', 'MerchantTransactionId', '')
+        amount = get_param_value(callback_data, 'amount', 'Amount', '')
+        transaction_id = get_param_value(callback_data, 'transactionId', 'EPSTransactionId', '')
+        error_code = get_param_value(callback_data, 'ErrorCode', '', '')
+        error_message = get_param_value(callback_data, 'ErrorMessage', '', '')
 
         logger.info(f'EPS Callback - Status: {status_param}, Transaction: {merchant_transaction_id}, Error: {error_code} - {error_message}')
 
@@ -519,9 +527,12 @@ def eps_payment_callback(request):
                                 try:
                                     # Check if this is a package purchase by looking at the order_id format
                                     order_id = transaction.customer_order_id
+                                    logger.info(f"🔍 Checking order_id for package activation: {order_id}")
+                                    
                                     if order_id and order_id.startswith('PKG-'):
                                         # Extract user_package_id from order_id
                                         user_package_id = order_id.replace('PKG-', '')
+                                        logger.info(f"📦 Package purchase detected, user_package_id: {user_package_id}")
                                         
                                         # Import and activate package
                                         from packages.views import activate_package_after_payment
@@ -538,12 +549,14 @@ def eps_payment_callback(request):
                                         )
                                         
                                         if package_activated:
-                                            logger.info(f'✅ Package activated for user_package_id: {user_package_id}')
+                                            logger.info(f'✅ Package activated successfully for user_package_id: {user_package_id}')
                                         else:
                                             logger.error(f'❌ Failed to activate package for user_package_id: {user_package_id}')
+                                    else:
+                                        logger.info(f"ℹ️ Not a package purchase (order_id: {order_id})")
                                             
                                 except Exception as package_error:
-                                    logger.error(f'❌ Package activation error: {str(package_error)}')
+                                    logger.error(f'❌ Package activation error: {str(package_error)}', exc_info=True)
                         else:
                             logger.warning(f'⚠️ EPS verification failed or status not Success: {eps_status}')
                             verification_success = False
@@ -621,17 +634,17 @@ def eps_payment_callback(request):
         webhook_log.save()
 
         # Determine frontend redirect URLs based on environment
-        base_frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+        base_frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
         
         # Redirect to appropriate frontend page based on status
         order_id = order.id if order else 'unknown'
         
         if status_param in ['success', 'completed'] and verification_success:
-            redirect_url = f'{base_frontend_url}/purchase/success?orderId={order_id}&gateway=eps&transaction={merchant_transaction_id}'
+            redirect_url = f'{base_frontend_url}/payment/success?gateway=eps&transaction={merchant_transaction_id}'
         elif status_param in ['cancel', 'cancelled']:
-            redirect_url = f'{base_frontend_url}/purchase/cancelled?orderId={order_id}&gateway=eps&transaction={merchant_transaction_id}'
+            redirect_url = f'{base_frontend_url}/payment/cancelled?gateway=eps&transaction={merchant_transaction_id}'
         else:
-            redirect_url = f'{base_frontend_url}/purchase/failed?orderId={order_id}&gateway=eps&transaction={merchant_transaction_id}&error={error_code}'
+            redirect_url = f'{base_frontend_url}/payment/failed?gateway=eps&transaction={merchant_transaction_id}&error={error_code}'
 
         logger.info(f'Redirecting to: {redirect_url}')
 
@@ -665,7 +678,7 @@ def eps_payment_callback(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def get_transaction_status(request, merchant_transaction_id):
     """
     Get transaction status from local database

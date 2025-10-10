@@ -2,7 +2,7 @@
 Package Serializers
 """
 from rest_framework import serializers
-from .models import Package, UserPackage, PackageFeatureUsage
+from .models import Package, UserPackage, PackageFeatureUsage, DailyOrderUsage
 from django.contrib.auth.models import User
 
 
@@ -15,7 +15,7 @@ class PackageSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'package_type', 'duration_type', 'price', 'duration_days',
             'description', 'max_listings', 'max_images_per_listing', 'featured_listings',
-            'priority_support', 'analytics_access', 'bulk_upload', 'api_access',
+            'daily_order_limit', 'priority_support', 'analytics_access', 'bulk_upload', 'api_access',
             'is_active', 'is_popular', 'features_list', 'created_at'
         ]
 
@@ -73,3 +73,34 @@ class UserProfilePackageSerializer(serializers.Serializer):
     package_history = UserPackageSerializer(many=True, read_only=True)
     feature_usage = PackageFeatureUsageSerializer(read_only=True)
     available_packages = PackageSerializer(many=True, read_only=True)
+
+
+class DailyOrderUsageSerializer(serializers.ModelSerializer):
+    """Serializer for DailyOrderUsage model"""
+    can_order_today = serializers.ReadOnlyField()
+    remaining_orders_today = serializers.ReadOnlyField(source='get_remaining_orders_today')
+    daily_limit = serializers.IntegerField(source='user_package.package.daily_order_limit', read_only=True)
+    is_unlimited = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = DailyOrderUsage
+        fields = [
+            'id', 'date', 'orders_used', 'daily_limit', 
+            'can_order_today', 'remaining_orders_today', 'is_unlimited',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['date', 'created_at', 'updated_at']
+    
+    def get_is_unlimited(self, obj):
+        return obj.user_package.package.daily_order_limit == 0
+
+
+class DailyOrderStatusSerializer(serializers.Serializer):
+    """Serializer for daily order status response"""
+    can_order = serializers.BooleanField()
+    remaining_orders = serializers.IntegerField()
+    daily_limit = serializers.IntegerField()
+    orders_used_today = serializers.IntegerField()
+    is_unlimited = serializers.BooleanField()
+    package_name = serializers.CharField()
+    package_type = serializers.CharField()

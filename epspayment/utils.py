@@ -278,25 +278,29 @@ def get_callback_urls(request, eps_config=None):
         eps_config: EPS configuration object (optional)
         
     Returns:
-        dict: Dictionary containing success, fail, and cancel URLs
+        dict: Dictionary containing success, fail, cancel, and callback URLs
     """
     if eps_config is None:
         eps_config = get_eps_configuration()
     
-    # Get base URL
-    scheme = request.scheme
-    host = request.get_host()
-    base_url = f"{scheme}://{host}"
+    # Always use custom domain for all callbacks (ignore config URLs)
+    base_callback_url = "http://localhost:8000"
     
-    # Use configured URLs or default ones
-    success_url = eps_config.success_url or f"{base_url}/api/payment/eps/callback?status=success"
-    fail_url = eps_config.fail_url or f"{base_url}/api/payment/eps/callback?status=fail"
-    cancel_url = eps_config.cancel_url or f"{base_url}/api/payment/eps/callback?status=cancel"
+    # Define all callback URLs with your custom domain
+    # These will always override any URLs set in EPS configuration
+    success_url = f"{base_callback_url}/api/payment/eps/callback?status=success"
+    fail_url = f"{base_callback_url}/api/payment/eps/callback?status=fail"
+    cancel_url = f"{base_callback_url}/api/payment/eps/callback?status=cancel"
+    callback_url = f"{base_callback_url}/api/payment/eps/callback"
+    
+    logger.info(f"🔗 Using custom callback domain: {base_callback_url}")
     
     return {
         'success_url': success_url,
         'fail_url': fail_url,
-        'cancel_url': cancel_url
+        'cancel_url': cancel_url,
+        'callback_url': callback_url,
+        'base_callback_url': base_callback_url
     }
 
 
@@ -443,6 +447,20 @@ def create_eps_payment(payment_data):
         # Generate x-hash for this transaction
         x_hash = generate_eps_hash(merchant_transaction_id, eps_config.hash_key)
         
+        # Get callback URLs using the utility function
+        # Note: We pass None as request since we're using hardcoded URLs
+        callback_urls = get_callback_urls(None, eps_config)
+        
+        # Log callback URLs for debugging
+        logger.info(f"🔗 EPS Callback URLs:")
+        logger.info(f"  Success: {callback_urls['success_url']}")
+        logger.info(f"  Fail: {callback_urls['fail_url']}")
+        logger.info(f"  Cancel: {callback_urls['cancel_url']}")
+        print(f"🔗 EPS Callback URLs:")
+        print(f"  Success: {callback_urls['success_url']}")
+        print(f"  Fail: {callback_urls['fail_url']}")
+        print(f"  Cancel: {callback_urls['cancel_url']}")
+        
         # Prepare EPS payment payload (matching your frontend structure)
         payment_payload = {
             "storeId": eps_config.store_id,
@@ -454,9 +472,9 @@ def create_eps_payment(payment_data):
             "totalAmount": str(validated_data['amount']),
             "ipAddress": "103.12.45.69",  # Default IP, can be improved
             "version": "1",
-            "successUrl": eps_config.success_url or f"{eps_config.base_url}/api/payment/eps/callback?status=success",
-            "failUrl": eps_config.fail_url or f"{eps_config.base_url}/api/payment/eps/callback?status=fail",
-            "cancelUrl": eps_config.cancel_url or f"{eps_config.base_url}/api/payment/eps/callback?status=cancel",
+            "successUrl": callback_urls['success_url'],
+            "failUrl": callback_urls['fail_url'],
+            "cancelUrl": callback_urls['cancel_url'],
             # Customer information
             "customerName": validated_data['customer_name'],
             "customerEmail": validated_data['customer_email'],

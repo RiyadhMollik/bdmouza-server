@@ -2,7 +2,7 @@
 Package Admin Configuration
 """
 from django.contrib import admin
-from .models import Package, UserPackage, PackageFeatureUsage
+from .models import Package, UserPackage, PackageFeatureUsage, DailyOrderUsage
 
 
 @admin.register(Package)
@@ -17,8 +17,8 @@ class PackageAdmin(admin.ModelAdmin):
             'fields': ('name', 'package_type', 'duration_type', 'price', 'duration_days', 'description')
         }),
         ('Features', {
-            'fields': ('max_listings', 'max_images_per_listing', 'featured_listings', 'priority_support', 
-                      'analytics_access', 'bulk_upload', 'api_access')
+            'fields': ('max_listings', 'max_images_per_listing', 'featured_listings', 'daily_order_limit', 
+                      'priority_support', 'analytics_access', 'bulk_upload', 'api_access')
         }),
         ('Status & Display', {
             'fields': ('is_active', 'is_popular', 'sort_order')
@@ -67,6 +67,29 @@ class PackageFeatureUsageAdmin(admin.ModelAdmin):
     ordering = ['-updated_at']
     
     readonly_fields = ['created_at', 'updated_at']
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('user_package__user', 'user_package__package')
+
+
+@admin.register(DailyOrderUsage)
+class DailyOrderUsageAdmin(admin.ModelAdmin):
+    list_display = ['user_package', 'date', 'orders_used', 'daily_limit_display', 'can_order_display']
+    list_filter = ['date', 'user_package__package__package_type']
+    search_fields = ['user_package__user__username', 'user_package__user__email']
+    date_hierarchy = 'date'
+    ordering = ['-date', '-orders_used']
+    
+    readonly_fields = ['created_at', 'updated_at']
+    
+    def daily_limit_display(self, obj):
+        limit = obj.user_package.package.daily_order_limit
+        return "Unlimited" if limit == 0 else f"{limit} orders"
+    daily_limit_display.short_description = 'Daily Limit'
+    
+    def can_order_display(self, obj):
+        return "✅" if obj.can_order_today() else "❌"
+    can_order_display.short_description = 'Can Order'
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('user_package__user', 'user_package__package')

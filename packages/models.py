@@ -35,6 +35,11 @@ class Package(models.Model):
     max_listings = models.IntegerField(default=0, help_text="0 means unlimited")
     max_images_per_listing = models.IntegerField(default=5)
     featured_listings = models.IntegerField(default=0, help_text="Number of featured listings allowed")
+    
+    # Daily Limits
+    daily_order_limit = models.IntegerField(default=0, help_text="Daily order limit (0 means unlimited)")
+    
+    # Advanced Features
     priority_support = models.BooleanField(default=False)
     analytics_access = models.BooleanField(default=False)
     bulk_upload = models.BooleanField(default=False)
@@ -71,6 +76,13 @@ class Package(models.Model):
         if self.featured_listings > 0:
             features.append(f"{self.featured_listings} featured listings")
         
+        # Daily Order Limit
+        if self.daily_order_limit == 0:
+            features.append("Unlimited daily orders")
+        else:
+            features.append(f"{self.daily_order_limit} orders per day")
+        
+        # Advanced Features
         if self.priority_support:
             features.append("Priority customer support")
         
@@ -165,6 +177,48 @@ class UserPackage(models.Model):
         
         remaining = self.end_date - timezone.now()
         return max(0, remaining.days)
+    
+    def can_order_today(self, file_count=1):
+        """Check if user can make orders today based on daily limit with specified file count"""
+        if not self.is_active():
+            return False
+        
+        today_usage = DailyOrderUsage.get_or_create_today_usage(self)
+        return today_usage.can_order_today(file_count=file_count)
+    
+    def get_daily_order_status(self):
+        """Get daily order status information"""
+        if not self.is_active():
+            return {
+                'can_order': False,
+                'remaining_orders': 0,
+                'daily_limit': 0,
+                'orders_used_today': 0,
+                'is_unlimited': False
+            }
+        
+        today_usage = DailyOrderUsage.get_or_create_today_usage(self)
+        daily_limit = self.package.daily_order_limit
+        
+        return {
+            'can_order': today_usage.can_order_today(),
+            'remaining_orders': today_usage.get_remaining_orders_today(),
+            'daily_limit': daily_limit,
+            'orders_used_today': today_usage.orders_used,
+            'is_unlimited': daily_limit == 0
+        }
+    
+    def increment_daily_order_usage(self, file_count=1):
+        """Increment today's order usage by specified file count"""
+        if not self.is_active():
+            return False
+        
+        today_usage = DailyOrderUsage.get_or_create_today_usage(self)
+        
+        if today_usage.can_order_today(file_count=file_count):
+            today_usage.increment_order_usage(file_count=file_count)
+            return True
+        return False
 
 
 class PackageFeatureUsage(models.Model):
@@ -208,3 +262,56 @@ class PackageFeatureUsage(models.Model):
         """Increment featured listing usage counter"""
         self.featured_listings_used += 1
         self.save()
+
+
+class DailyOrderUsage(models.Model):
+    """
+    Track daily order usage for user packages
+    """
+    user_package = models.ForeignKey(UserPackage, on_delete=models.CASCADE, related_name='daily_usage')
+    date = models.DateField(default=timezone.now)
+    orders_used = models.IntegerField(default=0)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['user_package', 'date']
+        verbose_name = 'Daily Order Usage'
+        verbose_name_plural = 'Daily Order Usage'
+        ordering = ['-date']
+    
+    def __str__(self):
+        return f"{self.user_package.user.username} - {self.date} - {self.orders_used} orders"
+    
+    def can_order_today(self, file_count=1):
+        """Check if user can make more orders today with specified file count"""
+        daily_limit = self.user_package.package.daily_order_limit
+        if daily_limit == 0:  # Unlimited
+            return True
+        return (self.orders_used + file_count) <= daily_limit
+    
+    def get_remaining_orders_today(self):
+        """Get remaining orders for today"""
+        daily_limit = self.user_package.package.daily_order_limit
+        if daily_limit == 0:  # Unlimited
+            return -1  # Indicates unlimited
+        return max(0, daily_limit - self.orders_used)
+    
+    def increment_order_usage(self, file_count=1):
+        """Increment daily order usage by specified file count"""
+        self.orders_used += file_count
+        self.save()
+        return self.orders_used
+    
+    @classmethod
+    def get_or_create_today_usage(cls, user_package):
+        """Get or create today's usage record for a user package"""
+        today = timezone.now().date()
+        usage, created = cls.objects.get_or_create(
+            user_package=user_package,
+            date=today,
+            defaults={'orders_used': 0}
+        )
+        return usage

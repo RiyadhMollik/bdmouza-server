@@ -102,6 +102,7 @@ class Purchases(Common):
     PAYMENT_METHODS = (
             ("bkash", "bKash"),
             ('eps', 'EPS'),
+            ('free', 'Free Order'),
             ('others', 'Others'),
         )
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS, default="bkash")

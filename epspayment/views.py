@@ -634,7 +634,7 @@ def eps_payment_callback(request):
         webhook_log.save()
 
         # Determine frontend redirect URLs based on environment
-        base_frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
+        base_frontend_url = getattr(settings, 'FRONTEND_URL', 'https://bdmouza.com')
         
         # Redirect to appropriate frontend page based on status
         order_id = order.id if order else 'unknown'

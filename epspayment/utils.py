@@ -284,7 +284,7 @@ def get_callback_urls(request, eps_config=None):
         eps_config = get_eps_configuration()
     
     # Always use custom domain for all callbacks (ignore config URLs)
-    base_callback_url = "http://localhost:8000"
+    base_callback_url = "https://api.bdmouza.com"
     
     # Define all callback URLs with your custom domain
     # These will always override any URLs set in EPS configuration

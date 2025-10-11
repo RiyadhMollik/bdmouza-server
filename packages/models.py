@@ -107,6 +107,7 @@ class UserPackage(models.Model):
         ('active', 'Active'),
         ('expired', 'Expired'),
         ('cancelled', 'Cancelled'),
+        ('failed', 'Payment Failed'),
     ]
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='packages')

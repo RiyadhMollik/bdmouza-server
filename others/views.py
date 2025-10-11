@@ -312,6 +312,7 @@ class PurchaseViewSet2(BaseViews):
                     'customer_email': email or 'unknown@example.com',
                     'customer_phone': user.phone_number if hasattr(user, 'phone_number') else '',
                     'order_id': f"ORD-{purchase.id}-{user.id}",
+                    'order_type': 'file',  # Specify order type as file
                     'description': f"Purchase #{purchase.id}",
                     'user_id': user.id,
                     'purchase_id': purchase.id
@@ -328,6 +329,7 @@ class PurchaseViewSet2(BaseViews):
                         "payment_method": "eps",
                         "payment_url": eps_result.get('payment_url'),
                         "purchase_id": purchase.id,
+                        "order_id": f"ORD-{purchase.id}-{user.id}",  # Include order_id in response
                         "transaction_id": eps_result.get('transaction_id')
                     }, status=status.HTTP_201_CREATED)
                 else:

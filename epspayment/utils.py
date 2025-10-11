@@ -559,6 +559,7 @@ def create_eps_payment(payment_data):
                 merchant_transaction_id=merchant_transaction_id,
                 eps_transaction_id=transaction_id,
                 customer_order_id=validated_data['order_id'],
+                order_type=payment_data.get('order_type', 'file'),  # Add order_type field
                 amount=validated_data['amount'],
                 currency='BDT',
                 customer_name=validated_data['customer_name'],

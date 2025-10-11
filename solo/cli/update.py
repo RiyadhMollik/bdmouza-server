@@ -123,7 +123,7 @@ def update(serial, yes, local_firmware_server, alpha):
 
     # Get firmware to use
     if local_firmware_server:
-        base_url = "https://api.bdmouza.com"
+        base_url = "http://localhost:8000"
     else:
         base_url = f"https://github.com/solokeys/solo/releases/download/{version}"
 

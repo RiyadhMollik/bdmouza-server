@@ -104,6 +104,15 @@ class EpsTransaction(models.Model):
         max_length=100,
         help_text="Customer's order ID"
     )
+    order_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('file', 'File Purchase'),
+            ('package', 'Package Purchase'),
+        ],
+        default='file',
+        help_text="Type of purchase: file or package"
+    )
     amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,

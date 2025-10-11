@@ -134,6 +134,7 @@ def purchase_package(request):
                 'customer_email': request.user.email or 'customer@example.com',
                 'customer_phone': getattr(request.user, 'phone_number', '01700000000') or '01700000000',
                 'order_id': f"PKG-{user_package.id}",
+                'order_type': 'package',  # Specify order type as package
                 'description': f"{package.name} Package Purchase",
                 'user_id': request.user.id,
                 'package_id': package.id,

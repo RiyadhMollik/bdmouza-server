@@ -3,7 +3,7 @@ EPS Payment Gateway Views
 """
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import redirect
@@ -444,12 +444,119 @@ def eps_payment_callback(request):
                 webhook_log.transaction = transaction
                 
                 # Try to find related order/purchase in your main app
+                order = None
+                user_package = None
+                order_type = None
+                
                 try:
-                    from others.models import Purchases
-                    order = Purchases.objects.get(trx_number=merchant_transaction_id)
-                    logger.info(f'Found related order: {order.id}')
-                except Purchases.DoesNotExist:
-                    logger.warning(f'No order found for transaction: {merchant_transaction_id}')
+                    # Determine order type from transaction record
+                    if transaction and hasattr(transaction, 'order_type'):
+                        order_type = transaction.order_type
+                        logger.info(f'🔍 Order type from transaction: {order_type}')
+                    else:
+                        # Fallback: detect from order ID format
+                        if transaction and transaction.customer_order_id:
+                            if transaction.customer_order_id.startswith('PKG-'):
+                                order_type = 'package'
+                            else:
+                                order_type = 'file'
+                            logger.info(f'� Order type detected from order_id: {order_type}')
+                    
+                    # Handle based on order type
+                    if order_type == 'package':
+                        # Package purchase - find UserPackage
+                        from packages.models import UserPackage
+                        logger.info(f'📦 Looking for package purchase with TRX: {merchant_transaction_id}')
+                        
+                        # First try exact TRX match
+                        user_package = UserPackage.objects.filter(
+                            transaction_id=merchant_transaction_id
+                        ).first()
+                        
+                        if user_package:
+                            logger.info(f'✅ Found UserPackage by exact TRX match: {user_package.id}')
+                        else:
+                            # Try extracting package ID from order_id (format: PKG-{id})
+                            if transaction and transaction.customer_order_id:
+                                try:
+                                    package_id = transaction.customer_order_id.replace('PKG-', '')
+                                    user_package = UserPackage.objects.filter(
+                                        id=package_id,
+                                        status='pending'
+                                    ).order_by('-created_at').first()
+                                    
+                                    if user_package:
+                                        # Update with correct transaction ID
+                                        user_package.transaction_id = merchant_transaction_id
+                                        user_package.save()
+                                        logger.info(f'✅ Found UserPackage by ID, updated TRX: {user_package.id}')
+                                except Exception as pkg_error:
+                                    logger.error(f'Error extracting package ID: {str(pkg_error)}')
+                    
+                    elif order_type == 'file':
+                        # File purchase - find Purchases record
+                        from others.models import Purchases
+                        logger.info(f'📄 Looking for file purchase with TRX: {merchant_transaction_id}')
+                        
+                        # First, try exact match by transaction ID
+                        order = Purchases.objects.filter(trx_number=merchant_transaction_id).first()
+                        
+                        if order:
+                            logger.info(f'✅ Found Purchases by exact TRX match: {order.id}')
+                        else:
+                            # Try to extract purchase ID from order ID (format: ORD-{purchase_id}-{user_id})
+                            if transaction and transaction.customer_order_id:
+                                order_id_parts = transaction.customer_order_id.split('-')
+                                if len(order_id_parts) >= 2 and order_id_parts[0] == 'ORD':
+                                    try:
+                                        purchase_id = int(order_id_parts[1])
+                                        order = Purchases.objects.filter(id=purchase_id, payment_status='pending').first()
+                                        if order:
+                                            # Update the purchase with the correct transaction ID
+                                            order.trx_number = merchant_transaction_id
+                                            order.save()
+                                            logger.info(f'✅ Found Purchases by Order ID extraction: {order.id}, updated TRX')
+                                    except (ValueError, IndexError) as e:
+                                        logger.warning(f'Could not parse purchase ID from order ID: {str(e)}')
+                            
+                            # Last resort: find by timestamp and amount matching
+                            if not order:
+                                parts = merchant_transaction_id.split('-')
+                                if len(parts) >= 2:
+                                    try:
+                                        timestamp_str = parts[1]
+                                        
+                                        transaction_timestamp = datetime.fromtimestamp(int(timestamp_str), tz=timezone.utc)
+                                        time_window_start = transaction_timestamp - timedelta(seconds=5)
+                                        time_window_end = transaction_timestamp + timedelta(seconds=5)
+                                        
+                                        if transaction.customer_email and transaction.customer_email != 'customer@example.com':
+                                            from users.models import Users
+                                            user = Users.objects.filter(email=transaction.customer_email).first()
+                                            if user:
+                                                order = Purchases.objects.filter(
+                                                    user=user,
+                                                    amount=transaction.amount,
+                                                    payment_status='pending',
+                                                    created_at__gte=time_window_start,
+                                                    created_at__lte=time_window_end
+                                                ).order_by('-created_at').first()
+                                                
+                                                if order:
+                                                    order.trx_number = merchant_transaction_id
+                                                    order.save()
+                                                    logger.info(f'✅ Found Purchases by timestamp match: {order.id}, updated TRX')
+                                    except (ValueError, IndexError) as e:
+                                        logger.warning(f'Could not parse timestamp from transaction ID: {str(e)}')
+                    
+                    # Log results
+                    if not order and not user_package:
+                        logger.warning(f'⚠️ No order or package found for TRX: {merchant_transaction_id}, order_type: {order_type}')
+                        
+                except Exception as e:
+                    logger.error(f'❌ Error finding purchase/package: {str(e)}', exc_info=True)
+                    order = None
+                    user_package = None
                 
                 # Update transaction based on callback
                 transaction.callback_data = callback_data
@@ -500,12 +607,49 @@ def eps_payment_callback(request):
                             
                             logger.info('✅ EPS payment verified and completed')
                             
-                            # Update order status if order exists
+                            # Log what we're looking for
+                            logger.info(f'📊 Callback Summary:')
+                            logger.info(f'  - Merchant TRX ID: {merchant_transaction_id}')
+                            logger.info(f'  - Customer Order ID: {transaction.customer_order_id if transaction else "N/A"}')
+                            logger.info(f'  - Order Type: {order_type}')
+                            logger.info(f'  - Customer Email: {transaction.customer_email if transaction else "N/A"}')
+                            logger.info(f'  - Found Order: {order.id if order else "None"}')
+                            logger.info(f'  - Found UserPackage: {user_package.id if user_package else "None"}')
+                            
+                            # If no order/package found for file purchase, try harder to find it
+                            if order_type == 'file' and not order:
+                                logger.warning(f'⚠️ File purchase not found, attempting deeper search...')
+                                from others.models import Purchases
+                                
+                                # Try finding ANY pending purchase with matching order_id in the trx_number
+                                if transaction and transaction.customer_order_id:
+                                    # Extract purchase ID from order ID (ORD-{id}-{user_id})
+                                    try:
+                                        order_id_parts = transaction.customer_order_id.split('-')
+                                        if len(order_id_parts) >= 2:
+                                            purchase_id = int(order_id_parts[1])
+                                            logger.info(f'🔍 Extracted purchase_id from order_id: {purchase_id}')
+                                            
+                                            # Find by purchase ID directly
+                                            order = Purchases.objects.filter(
+                                                id=purchase_id,
+                                                payment_status='pending'
+                                            ).first()
+                                            
+                                            if order:
+                                                # Update with correct transaction ID
+                                                order.trx_number = merchant_transaction_id
+                                                order.save()
+                                                logger.info(f'✅ Found purchase by ID extraction: {order.id}')
+                                    except (ValueError, IndexError, Exception) as e:
+                                        logger.error(f'Could not extract purchase ID: {str(e)}')
+                            
+                            # Update order status if order exists (file purchase)
                             if order:
                                 order.payment_status = 'completed'
-                                order.status = 'confirmed'
+                                order.status = True  # Set to active (BooleanField)
                                 order.save()
-                                logger.info(f'Order {order.id} status updated to confirmed')
+                                logger.info(f'✅ File purchase {order.id} status updated to completed/active')
                                 
                                 # Add to Google Group (if applicable)
                                 try:
@@ -519,44 +663,39 @@ def eps_payment_callback(request):
                                         },
                                         timeout=10
                                     )
-                                    logger.info(f'✅ Google Group add request sent for {transaction.customer_email}')
+                                    logger.info(f'✅ Google Group add request sent for {order.user.email if hasattr(order, "user") and order.user else transaction.customer_email}')
                                 except Exception as google_error:
                                     logger.error(f'❌ Failed to send Google Group add request: {str(google_error)}')
-                                
-                                # Handle package activation if this is a package purchase
+                            
+                            # Activate package if package purchase exists
+                            if user_package:
                                 try:
-                                    # Check if this is a package purchase by looking at the order_id format
-                                    order_id = transaction.customer_order_id
-                                    logger.info(f"🔍 Checking order_id for package activation: {order_id}")
+                                    logger.info(f"📦 Activating package purchase, user_package_id: {user_package.id}")
                                     
-                                    if order_id and order_id.startswith('PKG-'):
-                                        # Extract user_package_id from order_id
-                                        user_package_id = order_id.replace('PKG-', '')
-                                        logger.info(f"📦 Package purchase detected, user_package_id: {user_package_id}")
-                                        
-                                        # Import and activate package
-                                        from packages.views import activate_package_after_payment
-                                        package_activated = activate_package_after_payment(
-                                            user_package_id=user_package_id,
-                                            transaction_data={
-                                                'status': status_param,
-                                                'merchantTransactionId': merchant_transaction_id,
-                                                'amount': amount,
-                                                'transactionId': transaction_id,
-                                                'timestamp': timezone.now().isoformat(),
-                                                'eps_verification': verification_data
-                                            }
-                                        )
-                                        
-                                        if package_activated:
-                                            logger.info(f'✅ Package activated successfully for user_package_id: {user_package_id}')
-                                        else:
-                                            logger.error(f'❌ Failed to activate package for user_package_id: {user_package_id}')
+                                    # Import and activate package
+                                    from packages.views import activate_package_after_payment
+                                    package_activated = activate_package_after_payment(
+                                        user_package_id=user_package.id,
+                                        transaction_data={
+                                            'status': status_param,
+                                            'merchantTransactionId': merchant_transaction_id,
+                                            'amount': amount,
+                                            'transactionId': transaction_id,
+                                            'timestamp': timezone.now().isoformat(),
+                                            'eps_verification': verification_data
+                                        }
+                                    )
+                                    
+                                    if package_activated:
+                                        logger.info(f'✅ Package activated successfully for user_package_id: {user_package.id}')
                                     else:
-                                        logger.info(f"ℹ️ Not a package purchase (order_id: {order_id})")
-                                            
-                                except Exception as package_error:
-                                    logger.error(f'❌ Package activation error: {str(package_error)}', exc_info=True)
+                                        logger.error(f'❌ Failed to activate package for user_package_id: {user_package.id}')
+                                except Exception as pkg_error:
+                                    logger.error(f'❌ Error activating package: {str(pkg_error)}')
+                            
+                            # Warn if neither order nor package found
+                            if not order and not user_package:
+                                logger.warning(f'⚠️ Payment completed but no file purchase or package found for TRX: {merchant_transaction_id}')
                         else:
                             logger.warning(f'⚠️ EPS verification failed or status not Success: {eps_status}')
                             verification_success = False
@@ -565,6 +704,18 @@ def eps_payment_callback(request):
                             
                             transaction.status = 'failed'
                             transaction.payment_status = 'failed'
+                            
+                            # Update order/package to failed status
+                            if order:
+                                order.payment_status = 'failed'
+                                order.status = False
+                                order.save()
+                                logger.info(f'✅ File purchase {order.id} marked as failed (verification failed)')
+                            
+                            if user_package:
+                                user_package.status = 'failed'
+                                user_package.save()
+                                logger.info(f'✅ Package purchase {user_package.id} marked as failed (verification failed)')
                             
                     except Exception as verification_error:
                         logger.error(f'EPS verification error: {str(verification_error)}')
@@ -575,6 +726,18 @@ def eps_payment_callback(request):
                         transaction.status = 'failed'
                         transaction.payment_status = 'failed'
                         
+                        # Update order/package to failed status
+                        if order:
+                            order.payment_status = 'failed'
+                            order.status = False
+                            order.save()
+                            logger.info(f'✅ File purchase {order.id} marked as failed (verification error)')
+                        
+                        if user_package:
+                            user_package.status = 'failed'
+                            user_package.save()
+                            logger.info(f'✅ Package purchase {user_package.id} marked as failed (verification error)')
+                        
                 elif status_param in ['cancel', 'cancelled']:
                     payment_status = 'cancelled'
                     order_status = 'cancelled'
@@ -582,11 +745,18 @@ def eps_payment_callback(request):
                     transaction.payment_status = 'cancelled'
                     logger.info('EPS payment cancelled by user')
                     
-                    # Update order if exists
+                    # Update order if exists (file purchase)
                     if order:
                         order.payment_status = 'cancelled'
-                        order.status = 'cancelled'
+                        order.status = False  # Set to inactive (BooleanField)
                         order.save()
+                        logger.info(f'✅ File purchase {order.id} marked as cancelled')
+                    
+                    # Update package if exists (package purchase)
+                    if user_package:
+                        user_package.status = 'cancelled'
+                        user_package.save()
+                        logger.info(f'✅ Package purchase {user_package.id} marked as cancelled')
                         
                 else:
                     # Failed status
@@ -596,11 +766,18 @@ def eps_payment_callback(request):
                     transaction.payment_status = 'failed'
                     logger.info(f'EPS payment failed: {status_param}')
                     
-                    # Update order if exists
+                    # Update order if exists (file purchase)
                     if order:
                         order.payment_status = 'failed'
-                        order.status = 'failed'
+                        order.status = False  # Set to inactive (BooleanField)
                         order.save()
+                        logger.info(f'✅ File purchase {order.id} marked as failed')
+                    
+                    # Update package if exists (package purchase)
+                    if user_package:
+                        user_package.status = 'failed'
+                        user_package.save()
+                        logger.info(f'✅ Package purchase {user_package.id} marked as failed')
                 
                 # Store error information if present
                 if error_code or error_message:
@@ -634,7 +811,7 @@ def eps_payment_callback(request):
         webhook_log.save()
 
         # Determine frontend redirect URLs based on environment
-        base_frontend_url = getattr(settings, 'FRONTEND_URL', 'https://bdmouza.com')
+        base_frontend_url = 'https://bdmouza.com'
         
         # Redirect to appropriate frontend page based on status
         order_id = order.id if order else 'unknown'

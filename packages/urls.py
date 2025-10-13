@@ -7,6 +7,10 @@ from . import views
 app_name = 'packages'
 
 urlpatterns = [
+    # Survey Type Pricing
+    path('api/survey-pricing/', views.get_survey_pricing, name='survey_pricing'),
+    path('api/survey-pricing/calculate/', views.calculate_survey_price, name='calculate_survey_price'),
+    
     # Package listing and details
     path('api/packages/', views.get_available_packages, name='available_packages'),
     path('api/packages/<int:package_id>/', views.get_package_details, name='package_details'),

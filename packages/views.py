@@ -8,9 +8,10 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.utils import timezone
+from decimal import Decimal
 import logging
 
-from .models import Package, UserPackage, PackageFeatureUsage, DailyOrderUsage
+from .models import Package, UserPackage, PackageFeatureUsage, DailyOrderUsage, SurveyTypePricing
 from .serializers import (
     PackageSerializer, 
     UserPackageSerializer, 
@@ -18,11 +19,90 @@ from .serializers import (
     UserProfilePackageSerializer,
     PackageFeatureUsageSerializer,
     DailyOrderUsageSerializer,
-    DailyOrderStatusSerializer
+    DailyOrderStatusSerializer,
+    SurveyTypePricingSerializer,
+    SurveyPriceCalculationSerializer
 )
 from others.models import Purchases
 
 logger = logging.getLogger(__name__)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_survey_pricing(request):
+    """
+    Get all survey type pricing
+    """
+    try:
+        survey_types = SurveyTypePricing.objects.filter(is_active=True).order_by('sort_order')
+        serializer = SurveyTypePricingSerializer(survey_types, many=True)
+        
+        return Response({
+            'success': True,
+            'survey_types': serializer.data,
+            'count': survey_types.count()
+        })
+    except Exception as e:
+        logger.error(f"Error fetching survey pricing: {str(e)}")
+        return Response({
+            'success': False,
+            'message': 'Error fetching survey pricing'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def calculate_survey_price(request):
+    """
+    Calculate price based on survey type and file count
+    POST: { "survey_type": "SA_RS", "file_count": 10 }
+    """
+    try:
+        serializer = SurveyPriceCalculationSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({
+                'success': False,
+                'message': 'Invalid request data',
+                'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        survey_type_code = serializer.validated_data['survey_type']
+        file_count = serializer.validated_data['file_count']
+        
+        # Get survey type pricing
+        survey_pricing = get_object_or_404(
+            SurveyTypePricing, 
+            survey_type=survey_type_code, 
+            is_active=True
+        )
+        
+        # Calculate price
+        total_price = survey_pricing.calculate_price(file_count)
+        price_per_file = survey_pricing.base_price
+        
+        return Response({
+            'success': True,
+            'pricing': {
+                'survey_type': survey_pricing.survey_type,
+                'display_name': survey_pricing.display_name,
+                'file_count': file_count,
+                'price_per_file': float(price_per_file),
+                'total_price': float(total_price),
+                'currency': 'BDT'
+            }
+        })
+    except SurveyTypePricing.DoesNotExist:
+        return Response({
+            'success': False,
+            'message': 'Survey type not found or inactive'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"Error calculating price: {str(e)}")
+        return Response({
+            'success': False,
+            'message': 'Error calculating price'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])

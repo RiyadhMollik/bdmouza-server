@@ -129,7 +129,7 @@ class ExtraFeaturePriceFilter(admin.SimpleListFilter):
 class PurchaseAdmin(admin.ModelAdmin):
     list_display = (
         'id', 'user_email', 'payment_method', 'payment_status',
-        'amount', 'trx_number', 'status', 'created_at',
+        'amount', 'trx_number', 'status', 'created_at_bdt',
     )
     list_filter = ('status', 'payment_status', 'extra_features')
     search_fields = ('user__email', 'trx_number', 'whatsapp_number', 'extra_features__name')
@@ -140,6 +140,21 @@ class PurchaseAdmin(admin.ModelAdmin):
     def user_email(self, obj):
         return obj.user.email
     user_email.short_description = 'User Email'
+
+    def created_at_bdt(self, obj):
+        """Display created_at in Bangladesh Time (BDT)"""
+        from django.utils import timezone
+        from datetime import datetime
+        import pytz
+        
+        if obj.created_at:
+            # Convert to Bangladesh timezone
+            bdt_tz = pytz.timezone('Asia/Dhaka')
+            bdt_time = obj.created_at.astimezone(bdt_tz)
+            return bdt_time.strftime('%Y-%m-%d %I:%M:%S %p')  # 12-hour format with AM/PM
+        return '-'
+    created_at_bdt.short_description = 'Created At (BDT)'
+    created_at_bdt.admin_order_field = 'created_at'  # Allow sorting by this field
 
     def changelist_view(self, request, extra_context=None):
         today = timezone.now().date()

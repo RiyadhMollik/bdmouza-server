@@ -5,8 +5,67 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from decimal import Decimal
+from django.core.validators import MinValueValidator
 
 User = get_user_model()
+
+
+class SurveyTypePricing(models.Model):
+    """
+    Pricing model for different survey types (SA_RS, CS, BS, etc.)
+    """
+    SURVEY_TYPES = [
+        ('SA_RS', 'SA/RS Survey'),
+        ('CS', 'CS Survey'),
+        ('BS', 'BS Survey'),
+        ('SA', 'SA Survey'),
+        ('RS', 'RS Survey'),
+    ]
+    
+    survey_type = models.CharField(
+        max_length=20, 
+        choices=SURVEY_TYPES, 
+        unique=True,
+        help_text="Survey type identifier"
+    )
+    
+    display_name = models.CharField(
+        max_length=100,
+        help_text="Display name in Bengali/English"
+    )
+    
+    # Pricing structure
+    base_price = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        help_text="Base price per file"
+    )
+    
+    # Status
+    is_active = models.BooleanField(default=True)
+    sort_order = models.IntegerField(default=0)
+    
+    # Metadata
+    description = models.TextField(blank=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['sort_order', 'survey_type']
+        verbose_name = 'Survey Type Pricing'
+        verbose_name_plural = 'Survey Type Pricing'
+    
+    def __str__(self):
+        return f"{self.survey_type} - ৳{self.base_price}"
+    
+    def calculate_price(self, file_count):
+        """Calculate total price based on file count"""
+        if file_count <= 0:
+            return Decimal('0.00')
+        return self.base_price * file_count
 
 
 class Package(models.Model):

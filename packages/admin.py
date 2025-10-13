@@ -2,7 +2,29 @@
 Package Admin Configuration
 """
 from django.contrib import admin
-from .models import Package, UserPackage, PackageFeatureUsage, DailyOrderUsage
+from .models import Package, UserPackage, PackageFeatureUsage, DailyOrderUsage, SurveyTypePricing
+
+
+@admin.register(SurveyTypePricing)
+class SurveyTypePricingAdmin(admin.ModelAdmin):
+    list_display = ['survey_type', 'display_name', 'base_price', 'is_active', 'sort_order', 'updated_at']
+    list_filter = ['is_active', 'survey_type']
+    search_fields = ['survey_type', 'display_name', 'description']
+    ordering = ['sort_order', 'survey_type']
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('survey_type', 'display_name', 'description')
+        }),
+        ('Pricing', {
+            'fields': ('base_price',)
+        }),
+        ('Status & Display', {
+            'fields': ('is_active', 'sort_order')
+        }),
+    )
+    
+    readonly_fields = ['created_at', 'updated_at']
 
 
 @admin.register(Package)

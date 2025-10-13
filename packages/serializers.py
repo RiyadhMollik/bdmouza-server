@@ -2,8 +2,33 @@
 Package Serializers
 """
 from rest_framework import serializers
-from .models import Package, UserPackage, PackageFeatureUsage, DailyOrderUsage
+from .models import Package, UserPackage, PackageFeatureUsage, DailyOrderUsage, SurveyTypePricing
 from django.contrib.auth.models import User
+
+
+class SurveyTypePricingSerializer(serializers.ModelSerializer):
+    """Serializer for Survey Type Pricing"""
+    
+    class Meta:
+        model = SurveyTypePricing
+        fields = [
+            'id', 'survey_type', 'display_name', 'base_price',
+            'is_active', 'sort_order', 'description',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+
+class SurveyPriceCalculationSerializer(serializers.Serializer):
+    """Serializer for price calculation request"""
+    survey_type = serializers.CharField(required=True)
+    file_count = serializers.IntegerField(required=True, min_value=1)
+    
+    def validate_survey_type(self, value):
+        """Validate survey type exists"""
+        if not SurveyTypePricing.objects.filter(survey_type=value, is_active=True).exists():
+            raise serializers.ValidationError("Invalid or inactive survey type")
+        return value
 
 
 class PackageSerializer(serializers.ModelSerializer):

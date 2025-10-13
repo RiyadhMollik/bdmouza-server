@@ -52,6 +52,7 @@ protobuf==5.29.4
 psycopg-binary==3.2.1
 pyasn1==0.6.1
 pyasn1_modules==0.4.2
+pytz==2025.2
 pydantic==2.11.5
 pydantic_core==2.33.2
 PyJWT==2.8.0

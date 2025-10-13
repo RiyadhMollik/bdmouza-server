@@ -106,18 +106,61 @@ def traverse_drive_path(path):
     else:
         return {'files': files}
 
+def get_full_path(service, file):
+    """Recursively get full path of a file/folder."""
+    path_parts = [file['name']]
+    parent_ids = file.get('parents', [])
+    visited = set()
+
+    while parent_ids:
+        parent_id = parent_ids[0]
+
+        if parent_id in visited:
+            break
+        visited.add(parent_id)
+
+        parent = service.files().get(
+            fileId=parent_id,
+            fields='id, name, parents'
+        ).execute()
+
+        path_parts.insert(0, parent['name'])
+
+        # stop if this parent has no more parents
+        if not parent.get('parents'):
+            break
+
+        parent_ids = parent.get('parents', [])
+
+    return "/".join(path_parts)
+
+
 def search_file_by_name(file_name):
     service = get_drive_service()
     safe_name = file_name.replace("'", "\\'")
-    query = f"name contains '{safe_name}' and trashed = false"
+    
+    # Filter only JPG or PDF files (case-insensitive)
+    query = (
+        f"(name contains '{safe_name}') and "
+        f"(mimeType='application/pdf' or mimeType='image/jpeg' or mimeType='image/jpg') and "
+        f"trashed = false"
+    )
 
     results = service.files().list(
         q=query,
         spaces='drive',
-        fields='files(id, name, mimeType, parents)'
+        fields='files(id, name, mimeType, parents)',
+        pageSize=10,        # Limit results to 10
+        orderBy='modifiedTime desc'  # Optional: sort by most recent
     ).execute()
 
-    return results.get('files', [])
+    files = results.get('files', [])
+    
+    # Add full path for each file
+    for file in files:
+        file['fullPath'] = get_full_path(service, file)
+
+    return files
 
 
 def compress_to_jpeg(img, target_kb=200, max_size=(800, 800)):

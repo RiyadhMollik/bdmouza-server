@@ -20,6 +20,11 @@ class SurveyTypePricing(models.Model):
         ('BS', 'BS Survey'),
         ('SA', 'SA Survey'),
         ('RS', 'RS Survey'),
+        ('DIYARA', 'DIYARA Survey'),
+        ('RS_BS', 'RS/BS Survey'),
+        ('BS_RS', 'BS/RS Survey'),
+        ('CS_SA', 'CS/SA Survey'),
+        ('SA_CS', 'SA/CS Survey'),
     ]
     
     survey_type = models.CharField(

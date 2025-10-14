@@ -46,6 +46,41 @@ class Command(BaseCommand):
                 'description': 'RS সার্ভে টাইপের জন্য মূল্য',
                 'sort_order': 5
             },
+            {
+                'survey_type': 'DIYARA',
+                'display_name': 'দিয়ারা সার্ভে',
+                'base_price': Decimal('15.00'),
+                'description': 'দিয়ারা সার্ভে টাইপের জন্য মূল্য',
+                'sort_order': 6
+            },
+            {
+                'survey_type': 'RS_BS',
+                'display_name': 'RS/BS সার্ভে',
+                'base_price': Decimal('20.00'),
+                'description': 'RS এবং BS সার্ভে টাইপের জন্য মূল্য',
+                'sort_order': 7
+            },
+            {
+                'survey_type': 'BS_RS',
+                'display_name': 'BS/RS সার্ভে',
+                'base_price': Decimal('20.00'),
+                'description': 'BS এবং RS সার্ভে টাইপের জন্য মূল্য',
+                'sort_order': 8
+            },
+            {
+                'survey_type': 'CS_SA',
+                'display_name': 'CS/SA সার্ভে',
+                'base_price': Decimal('18.00'),
+                'description': 'CS এবং SA সার্ভে টাইপের জন্য মূল্য',
+                'sort_order': 9
+            },
+            {
+                'survey_type': 'SA_CS',
+                'display_name': 'SA/CS সার্ভে',
+                'base_price': Decimal('18.00'),
+                'description': 'SA এবং CS সার্ভে টাইপের জন্য মূল্য',
+                'sort_order': 10
+            },
         ]
 
         created_count = 0

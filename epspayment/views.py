@@ -798,7 +798,6 @@ def eps_payment_callback(request):
         base_frontend_url = 'https://bdmouza.com'
         # base_frontend_url = 'http://localhost:5173'
         
-        # Redirect to appropriate frontend page based on status
         order_id = order.id if order else 'unknown'
         
         if status_param in ['success', 'completed'] and verification_success:

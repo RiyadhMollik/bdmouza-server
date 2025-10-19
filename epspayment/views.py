@@ -651,22 +651,6 @@ def eps_payment_callback(request):
                                 order.save()
                                 logger.info(f'✅ File purchase {order.id} status updated to completed/active')
                                 
-                                # Add to Google Group (if applicable)
-                                try:
-                                    google_group_response = requests.post(
-                                        'https://script.google.com/macros/s/AKfycbxPmItKArXX2pA9ljdreiOKNQbwUIOQRgwwp_FH2-_wZq90K3qZuDN-U4bFU-FRIU_Cfg/exec',
-                                        json={
-                                            'groupEmail': 'filesharing@bdmouza.com',
-                                            'memberEmail': order.user.email if hasattr(order, 'user') and order.user else transaction.customer_email,
-                                            'memberType': 'USER',
-                                            'memberRole': 'MEMBER'
-                                        },
-                                        timeout=10
-                                    )
-                                    logger.info(f'✅ Google Group add request sent for {order.user.email if hasattr(order, "user") and order.user else transaction.customer_email}')
-                                except Exception as google_error:
-                                    logger.error(f'❌ Failed to send Google Group add request: {str(google_error)}')
-                            
                             # Activate package if package purchase exists
                             if user_package:
                                 try:
@@ -812,6 +796,7 @@ def eps_payment_callback(request):
 
         # Determine frontend redirect URLs based on environment
         base_frontend_url = 'https://bdmouza.com'
+        # base_frontend_url = 'http://localhost:5173'
         
         # Redirect to appropriate frontend page based on status
         order_id = order.id if order else 'unknown'

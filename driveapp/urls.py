@@ -14,6 +14,7 @@ urlpatterns = [
     path('api/drive/search-file/', views.DriveFileSearchView.as_view(), name='drive-file-search'),
     path('api/drive/preview/', views.DriveFilePreviewByIdView.as_view(), name='drive_preview'),
     path('user-files/', views.UserPurchasedFilesView.as_view(), name='user-purchased-files'),
+    path('user-files-batch/', views.UserPurchasedFilesBatchView.as_view(), name='user-purchased-files-batch'),
     path("drive/convert-file/", views.DriveFileConvertView.as_view(), name="drive_convert_file"),
     
 ]

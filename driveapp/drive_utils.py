@@ -162,6 +162,94 @@ def search_file_by_name(file_name):
 
     return files
 
+def search_file_by_name_with_timeout(file_name, timeout=5):
+    """
+    Search for a file with timeout protection
+    """
+    import signal
+    
+    def timeout_handler(signum, frame):
+        raise TimeoutError(f"Search timeout for file: {file_name}")
+    
+    # Set up timeout
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(timeout)
+    
+    try:
+        result = search_file_by_name(file_name)
+        signal.alarm(0)  # Cancel timeout
+        return result
+    except TimeoutError:
+        signal.alarm(0)  # Cancel timeout
+        raise
+    except Exception as e:
+        signal.alarm(0)  # Cancel timeout
+        raise e
+    
+    
+def search_file_by_name_with_cache(file_name):
+    """
+    Search for a file with caching
+    """
+    # Check cache first
+    cache_key = f"file_search_{file_name}"
+    cached_result = cache.get(cache_key)
+    if cached_result:
+        return cached_result
+    
+    try:
+        result = search_file_by_name(file_name)
+        # Cache successful results for 10 minutes
+        if result:
+            cache.set(cache_key, result, 600)
+        return result
+    except Exception as e:
+        # Cache failed results for 2 minutes to avoid repeated failures
+        cache.set(cache_key, [], 120)
+        raise e
+
+
+def batch_search_files(file_names, max_workers=3):
+    """
+    Search multiple files in parallel with caching and error handling
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from django.core.cache import cache
+    
+    results = {}
+    failed_files = []
+    
+    # Remove duplicates while preserving order
+    unique_files = list(dict.fromkeys(file_names))
+    
+    # Use ThreadPoolExecutor with limited workers
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks using the cached search function
+        future_to_filename = {
+            executor.submit(search_file_by_name_with_cache, file_name): file_name 
+            for file_name in unique_files
+        }
+        
+        # Collect results with timeout
+        for future in as_completed(future_to_filename, timeout=60):
+            file_name = future_to_filename[future]
+            try:
+                files = future.result(timeout=5)
+                results[file_name] = files or []
+                    
+            except Exception as e:
+                failed_files.append({
+                    'file_name': file_name,
+                    'error': str(e)
+                })
+    
+    return {
+        'results': results,
+        'failed_files': failed_files,
+        'total_files': len(unique_files),
+        'successful_files': len(results)
+    }
+
 
 def compress_to_jpeg(img, target_kb=200, max_size=(800, 800)):
     img = img.convert("RGB")
